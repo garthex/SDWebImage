@@ -8,6 +8,7 @@
 
 #import "SDImageCache.h"
 #import "SDWebImageDecoder.h"
+#import "UIImage+GIF.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <mach/mach.h>
 #import <mach/mach_host.h>
@@ -164,8 +165,7 @@ static const NSInteger kDefaultCacheMaxCacheAge = 60 * 60 * 24 * 7; // 1 week
     }
     
     // Second check the disk cache...
-    UIImage *diskImage = [UIImage decodedImageWithImage:SDScaledImageForPath(key, [NSData dataWithContentsOfFile:[self cachePathForKey:key]])];
-    
+    UIImage *diskImage = [self diskImageForKey:key];
     if (diskImage)
     {
         CGFloat cost = diskImage.size.height * diskImage.size.width * diskImage.scale;
@@ -173,6 +173,35 @@ static const NSInteger kDefaultCacheMaxCacheAge = 60 * 60 * 24 * 7; // 1 week
     }
     
     return diskImage;
+}
+
+- (UIImage *)diskImageForKey:(NSString *)key
+{
+    NSString *path = [self cachePathForKey:key];
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data)
+    {
+        if ([data sd_isGIF])
+        {
+            UIImage *image = [UIImage sd_animatedGIFWithData:data];
+            return [self scaledImageForKey:key image:image];
+        }
+        else
+        {
+            UIImage *image = [[UIImage alloc] initWithData:data];
+            UIImage *scaledImage = [self scaledImageForKey:key image:image];
+            return [UIImage decodedImageWithImage:scaledImage];
+        }
+    }
+    else
+    {
+        return nil;
+    }
+}
+
+- (UIImage *)scaledImageForKey:(NSString *)key image:(UIImage *)image
+{
+    return SDScaledImageForKey(key, image);
 }
 
 - (void)queryDiskCacheForKey:(NSString *)key done:(void (^)(UIImage *image, SDImageCacheType cacheType))doneBlock
@@ -197,8 +226,7 @@ static const NSInteger kDefaultCacheMaxCacheAge = 60 * 60 * 24 * 7; // 1 week
     {
         @autoreleasepool
         {
-            UIImage *diskImage = [UIImage decodedImageWithImage:SDScaledImageForPath(key, [NSData dataWithContentsOfFile:[self cachePathForKey:key]])];
-
+            UIImage *diskImage = [self diskImageForKey:key];
             if (diskImage)
             {
                 CGFloat cost = diskImage.size.height * diskImage.size.width * diskImage.scale;
